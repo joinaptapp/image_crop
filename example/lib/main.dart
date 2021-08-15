@@ -58,12 +58,34 @@ class _MyAppState extends State<MyApp> {
     if (_lastCropped == null) {
       return Crop.file(
         _sample,
-        aspectRatio: 2 / 5,
+        aspectRatio: 1,
         alwaysShowGrid: false,
         key: cropKey,
         maximumScale: 1.5,
+        cropShape: CropShape.circle,
       );
     }
+    // For testing purposes
+    // if (_lastCropped == null) {
+    //   return Crop.file(
+    //     _sample,
+    //     aspectRatio: 2 / 4.5,
+    //     alwaysShowGrid: false,
+    //     key: cropKey,
+    //     maximumScale: 1.5,
+    //     cropShape: CropShape.roundedRectangle,
+    //   );
+    // }
+    // if (_lastCropped == null) {
+    //   return Crop.file(
+    //     _sample,
+    //     aspectRatio: 3 / 4,
+    //     alwaysShowGrid: false,
+    //     key: cropKey,
+    //     maximumScale: 1.5,
+    //     cropShape: CropShape.basic,
+    //   );
+    // }
     return Image.file(_lastCropped, fit: BoxFit.fitHeight);
   }
 
