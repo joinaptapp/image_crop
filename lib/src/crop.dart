@@ -13,12 +13,19 @@ const _kCropMinFraction = 0.1;
 enum _CropAction { none, moving, cropping, scaling }
 enum _CropHandleSide { none, topLeft, topRight, bottomLeft, bottomRight }
 
+enum CropShape {
+  basic,
+  roundedRectangle,
+  circle,
+}
+
 class Crop extends StatefulWidget {
   final ImageProvider image;
   final double? aspectRatio;
   final double maximumScale;
   final bool alwaysShowGrid;
   final ImageErrorListener? onImageError;
+  final CropShape cropShape;
 
   const Crop({
     Key? key,
@@ -27,6 +34,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.cropShape = CropShape.basic,
   }) : super(key: key);
 
   Crop.file(
@@ -37,6 +45,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.cropShape = CropShape.roundedRectangle,
   })  : image = FileImage(file, scale: scale),
         super(key: key);
 
@@ -49,6 +58,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.cropShape = CropShape.roundedRectangle,
   })  : image = AssetImage(assetName, bundle: bundle, package: package),
         super(key: key);
 
@@ -190,6 +200,7 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
           onScaleEnd: _isEnabled ? _handleScaleEnd : null,
           child: CustomPaint(
             painter: _CropPainter(
+              cropShape: widget.cropShape,
               image: _image,
               ratio: _ratio,
               view: _view,
@@ -292,8 +303,10 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
       }
     }
     // print('Default area: Width is $width, height is $height');
-    // Change crop area height scale
-    height -= 0.2;
+    // Change crop area height scale for rounded rectangle
+    if (widget.cropShape == CropShape.roundedRectangle) {
+      height -= 0.2;
+    }
     final aspectRatio = _maxAreaWidthMap[widget.aspectRatio];
     if (aspectRatio != null) {
       _maxAreaWidthMap[aspectRatio] = width;
@@ -635,6 +648,7 @@ class _CropPainter extends CustomPainter {
   final Rect area;
   final double scale;
   final double active;
+  final CropShape cropShape;
 
   _CropPainter({
     required this.image,
@@ -643,6 +657,7 @@ class _CropPainter extends CustomPainter {
     required this.area,
     required this.scale,
     required this.active,
+    required this.cropShape,
   });
 
   @override
@@ -691,8 +706,13 @@ class _CropPainter extends CustomPainter {
       canvas.restore();
     }
 
-    paint.color = Color(0xFF1A1A1A).withOpacity(_kCropOverlayActiveOpacity * active +
-            _kCropOverlayInactiveOpacity * (1.0 - active));
+    final opacity = _kCropOverlayActiveOpacity * active + _kCropOverlayInactiveOpacity * (1.0 - active);
+
+    if (cropShape == CropShape.roundedRectangle || cropShape == CropShape.circle) {
+      paint.color = Color(0xFF1A1A1A).withOpacity(opacity);
+    } else {
+      paint.color = Color.fromRGBO(0x0, 0x0, 0x0, opacity);
+    }
 
     final boundaries = Rect.fromLTWH(
       rect.width * area.left,
@@ -704,39 +724,60 @@ class _CropPainter extends CustomPainter {
     canvas.restore();
     canvas.saveLayer(null, Paint()..blendMode = BlendMode.multiply);
 
-    var pa = Paint()..blendMode = BlendMode.clear;
+    final pa = Paint()..blendMode = BlendMode.clear;
 
-    canvas.drawRect(Rect.fromLTRB(0.0, 0, rect.width, rect.bottom), paint);
+    if (cropShape == CropShape.roundedRectangle) {
+      canvas.drawRect(Rect.fromLTRB(0.0, 0, rect.width, rect.bottom), paint);
+    }
 
-    // Circle
-    // canvas.drawCircle(boundaries.center, boundaries.height / 2, pa);
+    if (cropShape == CropShape.basic) {
+      canvas.drawRect(Rect.fromLTRB(0.0, 0, rect.width, rect.bottom), pa);
+    }
 
-    final radius = Radius.circular(24);
+    if (cropShape == CropShape.circle) {
+      canvas.drawRect(Rect.fromLTRB(0.0, 0, rect.width, rect.bottom), paint);
+    }
 
-    canvas.drawRRect(
-      RRect.fromLTRBAndCorners(
-        boundaries.left,
-        boundaries.top,
-        boundaries.right,
-        boundaries.bottom,
-        topLeft: radius,
-        topRight: radius,
-        bottomLeft: radius,
-        bottomRight: radius,
-      ),
-      pa,
-    );
+    // Start draw crop shape
 
-    // canvas.drawRect(Rect.fromLTRB(0.0, 40.0, rect.width, boundaries.top), paint);
-    // canvas.drawRect(
-    //     Rect.fromLTRB(0.0, boundaries.bottom - 40.0, rect.width, rect.height), paint);
-    // canvas.drawRect(
-    //     Rect.fromLTRB(0.0, boundaries.top, boundaries.left, boundaries.bottom),
-    //     paint);
-    // canvas.drawRect(
-    //     Rect.fromLTRB(
-    //         boundaries.right, boundaries.top, rect.width, boundaries.bottom),
-    //     paint);
+    if (cropShape == CropShape.circle) {
+      canvas.drawCircle(
+        Offset(boundaries.center.dx, boundaries.center.dy),
+        boundaries.height * ratio,
+        pa
+      );
+    }
+
+    if (cropShape == CropShape.roundedRectangle) {
+      final radius = Radius.circular(24);
+
+      canvas.drawRRect(
+        RRect.fromLTRBAndCorners(
+          boundaries.left,
+          boundaries.top,
+          boundaries.right,
+          boundaries.bottom,
+          topLeft: radius,
+          topRight: radius,
+          bottomLeft: radius,
+          bottomRight: radius,
+        ),
+        pa,
+      );
+    }
+
+    if (cropShape == CropShape.basic) {
+      canvas.drawRect(Rect.fromLTRB(0.0, 0.0, rect.width, boundaries.top), paint);
+      canvas.drawRect(
+         Rect.fromLTRB(0.0, boundaries.bottom, rect.width, rect.height), paint);
+      canvas.drawRect(
+         Rect.fromLTRB(0.0, boundaries.top, boundaries.left, boundaries.bottom),
+         paint);
+      canvas.drawRect(
+         Rect.fromLTRB(
+             boundaries.right, boundaries.top, rect.width, boundaries.bottom),
+         paint);
+    }
 
     if (boundaries.isEmpty == false) {
       // _drawGrid(canvas, boundaries);
