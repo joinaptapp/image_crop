@@ -54,11 +54,24 @@ class _MyAppState extends State<MyApp> {
     return Center(child: _buildOpenImage());
   }
 
+  _buildCropped() {
+    if (_lastCropped == null) {
+      return Crop.file(
+        _sample,
+        aspectRatio: 2 / 5,
+        alwaysShowGrid: false,
+        key: cropKey,
+        maximumScale: 1.5,
+      );
+    }
+    return Image.file(_lastCropped, fit: BoxFit.fitHeight);
+  }
+
   Widget _buildCroppingImage() {
     return Column(
       children: <Widget>[
         Expanded(
-          child: Crop.file(_sample, key: cropKey),
+          child: _buildCropped(),
         ),
         Container(
           padding: const EdgeInsets.only(top: 20.0),
@@ -132,9 +145,10 @@ class _MyAppState extends State<MyApp> {
     );
 
     sample.delete();
-
-    _lastCropped?.delete();
-    _lastCropped = file;
+    setState(() {
+      _lastCropped?.delete();
+      _lastCropped = file;
+    });
 
     debugPrint('$file');
   }
