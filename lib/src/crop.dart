@@ -84,14 +84,17 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
 
   double get scale => _area.shortestSide / _scale;
 
-  Rect? get area => _view.isEmpty
-      ? null
-      : Rect.fromLTWH(
+  Rect? get area {
+    final customArea = Rect.fromLTWH(
           _area.left * _view.width / _scale - _view.left,
           _area.top * _view.height / _scale - _view.top,
           _area.width * _view.width / _scale,
           _area.height * _view.height / _scale,
         );
+    return _view.isEmpty
+      ? null
+      : customArea;
+  }
 
   bool get _isEnabled => _view.isEmpty == false && _image != null;
 
@@ -173,30 +176,32 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
   }
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints.expand(),
-        child: Listener(
-          onPointerDown: (event) => pointers++,
-          onPointerUp: (event) => pointers = 0,
-          child: GestureDetector(
-            key: _surfaceKey,
-            behavior: HitTestBehavior.opaque,
-            onScaleStart: _isEnabled ? _handleScaleStart : null,
-            onScaleUpdate: _isEnabled ? _handleScaleUpdate : null,
-            onScaleEnd: _isEnabled ? _handleScaleEnd : null,
-            child: CustomPaint(
-              painter: _CropPainter(
-                image: _image,
-                ratio: _ratio,
-                view: _view,
-                area: _area,
-                scale: _scale,
-                active: _activeController.value,
-              ),
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints.expand(),
+      child: Listener(
+        onPointerDown: (event) => pointers++,
+        onPointerUp: (event) => pointers = 0,
+        child: GestureDetector(
+          key: _surfaceKey,
+          behavior: HitTestBehavior.opaque,
+          onScaleStart: _isEnabled ? _handleScaleStart : null,
+          onScaleUpdate: _isEnabled ? _handleScaleUpdate : null,
+          onScaleEnd: _isEnabled ? _handleScaleEnd : null,
+          child: CustomPaint(
+            painter: _CropPainter(
+              image: _image,
+              ratio: _ratio,
+              view: _view,
+              area: _area,
+              scale: _scale,
+              active: _activeController.value,
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 
   void _activate() {
     _activeController.animateTo(
@@ -286,6 +291,9 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
                 viewWidth;
       }
     }
+    // print('Default area: Width is $width, height is $height');
+    // Change crop area height scale
+    height -= 0.2;
     final aspectRatio = _maxAreaWidthMap[widget.aspectRatio];
     if (aspectRatio != null) {
       _maxAreaWidthMap[aspectRatio] = width;
@@ -542,11 +550,14 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
   }
 
   void _handleScaleUpdate(ScaleUpdateDetails details) {
+    // print('Crop action is $_action');
     if (_action == _CropAction.none) {
       if (_handle == _CropHandleSide.none) {
         _action = pointers == 2 ? _CropAction.scaling : _CropAction.moving;
       } else {
-        _action = _CropAction.cropping;
+        // Disable handles
+        // _action = _CropAction.cropping;
+        _action = _CropAction.none;
       }
     }
 
@@ -647,8 +658,9 @@ class _CropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(
-      _kCropHandleSize / 2,
-      _kCropHandleSize / 2,
+      // Dont set top and left position by crop handle because its disabled
+      0,
+      0,
       size.width - _kCropHandleSize,
       size.height - _kCropHandleSize,
     );
@@ -679,32 +691,56 @@ class _CropPainter extends CustomPainter {
       canvas.restore();
     }
 
-    paint.color = Color.fromRGBO(
-        0x0,
-        0x0,
-        0x0,
-        _kCropOverlayActiveOpacity * active +
+    paint.color = Color(0xFF1A1A1A).withOpacity(_kCropOverlayActiveOpacity * active +
             _kCropOverlayInactiveOpacity * (1.0 - active));
+
     final boundaries = Rect.fromLTWH(
       rect.width * area.left,
       rect.height * area.top,
       rect.width * area.width,
       rect.height * area.height,
     );
-    canvas.drawRect(Rect.fromLTRB(0.0, 0.0, rect.width, boundaries.top), paint);
-    canvas.drawRect(
-        Rect.fromLTRB(0.0, boundaries.bottom, rect.width, rect.height), paint);
-    canvas.drawRect(
-        Rect.fromLTRB(0.0, boundaries.top, boundaries.left, boundaries.bottom),
-        paint);
-    canvas.drawRect(
-        Rect.fromLTRB(
-            boundaries.right, boundaries.top, rect.width, boundaries.bottom),
-        paint);
+
+    canvas.restore();
+    canvas.saveLayer(null, Paint()..blendMode = BlendMode.multiply);
+
+    var pa = Paint()..blendMode = BlendMode.clear;
+
+    canvas.drawRect(Rect.fromLTRB(0.0, 0, rect.width, rect.bottom), paint);
+
+    // Circle
+    // canvas.drawCircle(boundaries.center, boundaries.height / 2, pa);
+
+    final radius = Radius.circular(24);
+
+    canvas.drawRRect(
+      RRect.fromLTRBAndCorners(
+        boundaries.left,
+        boundaries.top,
+        boundaries.right,
+        boundaries.bottom,
+        topLeft: radius,
+        topRight: radius,
+        bottomLeft: radius,
+        bottomRight: radius,
+      ),
+      pa,
+    );
+
+    // canvas.drawRect(Rect.fromLTRB(0.0, 40.0, rect.width, boundaries.top), paint);
+    // canvas.drawRect(
+    //     Rect.fromLTRB(0.0, boundaries.bottom - 40.0, rect.width, rect.height), paint);
+    // canvas.drawRect(
+    //     Rect.fromLTRB(0.0, boundaries.top, boundaries.left, boundaries.bottom),
+    //     paint);
+    // canvas.drawRect(
+    //     Rect.fromLTRB(
+    //         boundaries.right, boundaries.top, rect.width, boundaries.bottom),
+    //     paint);
 
     if (boundaries.isEmpty == false) {
-      _drawGrid(canvas, boundaries);
-      _drawHandles(canvas, boundaries);
+      // _drawGrid(canvas, boundaries);
+      // _drawHandles(canvas, Rect.fromLTRB(boundaries.left, boundaries.top, boundaries.right, boundaries.bottom));
     }
 
     canvas.restore();
